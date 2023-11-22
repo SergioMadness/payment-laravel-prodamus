@@ -1,0 +1,48 @@
+{
+  "name": "professionalweb/payment-laravel-prodamus",
+  "description": "Driver for Prodamus",
+  "homepage": "https://getlms.online/",
+  "keywords": [
+    "getlms",
+    "getlms.online",
+    "composer",
+    "payment system",
+    "prodamus",
+    "laravel"
+  ],
+  "minimum-stability": "stable",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Zinchenko Sergey",
+      "email": "zinchenko@getlms.online"
+    }
+  ],
+  "support": {
+    "email": "zinchenko@getlms.online",
+    "issues": "https://github.com/SergioMadness/payment-laravel-paykeeper/issues",
+    "wiki": "https://github.com/SergioMadness/payment-laravel-paykeeper/wiki",
+    "source": "https://github.com/SergioMadness/payment-laravel-paykeeper/releases"
+  },
+  "require": {
+    "professionalweb/payment-laravel": "dev-develop"
+  },
+  "require-dev": {
+  },
+  "config": {
+    "process-timeout": 1800
+  },
+  "autoload": {
+    "psr-4": {
+      "professionalweb\\payment\\": "src/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "professionalweb\\payment\\ProdamusProvider"
+      ]
+    }
+  }
+}
