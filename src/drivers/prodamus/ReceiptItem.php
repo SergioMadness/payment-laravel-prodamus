@@ -20,7 +20,7 @@ class ReceiptItem extends IReceiptItem
             'name'     => mb_substr($this->getName(), 0, 128),
             'price'    => $this->getPrice(),
             'quantity' => $this->getQty(),
-            'sku'      => '',
+            'sku'      => md5($this->getName()),
         ];
     }
 }

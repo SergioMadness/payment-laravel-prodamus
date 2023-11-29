@@ -56,52 +56,58 @@ class ProdamusDriver implements PayService, ProdamusService
      */
     public function getPaymentLink($orderId, $paymentId, float $amount, string $currency = self::CURRENCY_RUR, string $paymentType = self::PAYMENT_TYPE_CARD, string $successReturnUrl = '', string $failReturnUrl = '', string $description = '', array $extraParams = [], Receipt $receipt = null): string
     {
-        $base64 = base64_encode($this->config['login'] . ':' . $this->config['password']);
-        $headers = [
-            'Content-Type: application/x-www-form-urlencoded',
-            'Authorization: Basic ' . $base64,
+        $linktoform = $this->config['domain'];
+
+        // Секретный ключ. Можно найти на странице настроек,
+        // в личном кабинете платежной формы.
+        $secret_key = $this->config['secret'];
+
+        $data = [
+            // хххх - номер заказ в системе интернет-магазина
+            'order_id'        => $orderId,
+
+            // +7хххххххххх - мобильный телефон клиента
+            'customer_phone'  => $extraParams['phone'] ?? '',
+
+            // ИМЯ@prodamus.ru - e-mail адрес клиента
+            'customer_email'  => $extraParams['email'] ?? '',
+
+            // перечень товаров заказа
+            'products'        => $receipt->toArray(),
+
+            // дополнительные данные
+            'customer_extra'  => $description,
+
+            // для интернет-магазинов доступно только действие "Оплата"
+            'do'              => 'link',
+
+            // url-адрес для возврата пользователя без оплаты
+            //           (при необходимости прописать свой адрес)
+            'urlReturn'       => $failReturnUrl,
+
+            // url-адрес для возврата пользователя при успешной оплате
+            //           (при необходимости прописать свой адрес)
+            'urlSuccess'      => $successReturnUrl,
+
+            // код системы интернет-магазина, запросить у поддержки,
+            //     для самописных систем можно оставлять пустым полем
+            //     (при необходимости прописать свой код)
+            'sys'             => $this->config['sys'],
+
+            // служебный url-адрес для уведомления интернет-магазина
+            //           о поступлении оплаты по заказу
+            // 	         пока реализован только для Advantshop,
+            //           формат данных настроен под систему интернет-магазина
+            //           (при необходимости прописать свой адрес)
+            'urlNotification' => $this->config['notificationUrl'],
         ];
 
-        $curl = curl_init();
 
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_URL, $this->config['apiUrl'] . '/info/settings/token/');
-        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'GET');
-        curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($curl, CURLOPT_HEADER, false);
+        $data['signature'] = Hmac::create($data, $secret_key);
 
-        // Инициируем запрос к API
-        $response = curl_exec($curl);
-        $tokenResponse = json_decode($response, true);
+        $link = sprintf('%s?%s', $linktoform, http_build_query($data));
 
-        if (!isset($tokenResponse['token'])) {
-            throw new \Exception();
-        }
-
-        $paymentParameters = [
-            'clientid'     => $extraParams['customerName'] ?? $extraParams['user_id'],
-            'client_email' => $extraParams['email'],
-            'orderid'      => $orderId,
-            'pay_amount'   => $amount,
-            'client_phone' => $extraParams['phone'] ?? '',
-            'cart'         => json_encode($receipt->toArray()),
-            'token'        => $tokenResponse['token'],
-        ];
-        $request = http_build_query($paymentParameters);
-
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_URL, $this->config['apiUrl'] . '/change/invoice/preview/');
-        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'POST');
-        curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($curl, CURLOPT_HEADER, false);
-        curl_setopt($curl, CURLOPT_POSTFIELDS, $request);
-
-        $response = json_decode(curl_exec($curl), true);
-        if (!isset($response['invoice_id'])) {
-            throw new \Exception();
-        }
-
-        return $response['invoice_url'];
+        return file_get_contents($link);
     }
 
     /**
@@ -127,9 +133,10 @@ class ProdamusDriver implements PayService, ProdamusService
      * @param string $failReturnUrl
      * @param string $description
      * @param array $extraParams
-     * @param Receipt $receipt
+     * @param Receipt|null $receipt
      *
      * @return Form
+     * @throws \Exception
      */
     public function getPaymentForm($orderId, $paymentId, float $amount, string $currency = self::CURRENCY_RUR, string $paymentType = self::PAYMENT_TYPE_CARD, string $successReturnUrl = '', string $failReturnUrl = '', string $description = '', array $extraParams = [], Receipt $receipt = null): Form
     {
@@ -145,7 +152,7 @@ class ProdamusDriver implements PayService, ProdamusService
      */
     public function validate(array $data): bool
     {
-        return md5($data['id'] . $data['sum'] . $data['clientid'] . $data['orderid'] . $this->config['secret']) === $data['key'];
+        return Hmac::verify($data, $this->config['secret'], apache_request_headers()['Sign'] ?? '');
     }
 
     /**
@@ -169,7 +176,7 @@ class ProdamusDriver implements PayService, ProdamusService
      */
     public function getOrderId(): string
     {
-        return $this->response['orderid'] ?? '';
+        return $this->response['order_num'] ?? '';
     }
 
     /**
@@ -179,7 +186,7 @@ class ProdamusDriver implements PayService, ProdamusService
      */
     public function getPaymentId(): string
     {
-        return $this->response['paymentid'] ?? '';
+        return $this->response['payment_id'] ?? '';
     }
 
     /**
@@ -189,7 +196,7 @@ class ProdamusDriver implements PayService, ProdamusService
      */
     public function getStatus(): string
     {
-        return 'success';
+        return $this->response['payment_status'];
     }
 
     /**
@@ -199,7 +206,7 @@ class ProdamusDriver implements PayService, ProdamusService
      */
     public function isSuccess(): bool
     {
-        return true;
+        return $this->getStatus() === 'success';
     }
 
     /**
@@ -209,7 +216,7 @@ class ProdamusDriver implements PayService, ProdamusService
      */
     public function getTransactionId(): string
     {
-        return $this->response['RRN'] ?? '';
+        return $this->response['order_id'] ?? '';
     }
 
     /**
@@ -259,7 +266,7 @@ class ProdamusDriver implements PayService, ProdamusService
      */
     public function getDateTime(): string
     {
-        return $this->response['obtain_datetime'] ?? '';
+        return $this->response['date'] ?? '';
     }
 
     /**
@@ -319,7 +326,7 @@ class ProdamusDriver implements PayService, ProdamusService
      */
     public function getEmail(): string
     {
-        return $this->response['client_email'] ?? '';
+        return $this->response['customer_email'] ?? '';
     }
 
     /**
@@ -356,7 +363,7 @@ class ProdamusDriver implements PayService, ProdamusService
         $result = new Response();
 
         if ($errorCode === self::RESPONSE_SUCCESS) {
-            $result->setContent('OK ' . md5($this->getParam('id') . $this->config['secret']));
+            $result->setContent('OK ');
         } else {
             $result->setContent('NOT OK')->setStatusCode(400);
         }
@@ -367,7 +374,7 @@ class ProdamusDriver implements PayService, ProdamusService
     /**
      * Prepare response on check request
      *
-     * @param int $errorCode
+     * @param int|null $errorCode
      *
      * @return Response
      */
