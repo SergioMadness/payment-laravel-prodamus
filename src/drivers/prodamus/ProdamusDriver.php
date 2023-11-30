@@ -64,48 +64,53 @@ class ProdamusDriver implements PayService, ProdamusService
 
         $data = [
             // хххх - номер заказ в системе интернет-магазина
-            'order_id'        => $orderId,
+            'order_id'       => $orderId,
 
             // +7хххххххххх - мобильный телефон клиента
-            'customer_phone'  => $extraParams['phone'] ?? '',
+            'customer_phone' => $extraParams['phone'] ?? '',
 
             // ИМЯ@prodamus.ru - e-mail адрес клиента
-            'customer_email'  => $extraParams['email'] ?? '',
+            'customer_email' => $extraParams['email'] ?? '',
 
             // перечень товаров заказа
-            'products'        => $receipt->toArray(),
+            'products'       => $receipt->toArray(),
 
             // дополнительные данные
-            'customer_extra'  => $description,
+            'customer_extra' => $description,
 
             // для интернет-магазинов доступно только действие "Оплата"
-            'do'              => 'link',
+            'do'             => 'link',
+
+            'urlFail'    => $failReturnUrl,
 
             // url-адрес для возврата пользователя без оплаты
             //           (при необходимости прописать свой адрес)
-            'urlReturn'       => $failReturnUrl,
+            'urlReturn'  => $failReturnUrl,
 
             // url-адрес для возврата пользователя при успешной оплате
             //           (при необходимости прописать свой адрес)
-            'urlSuccess'      => $successReturnUrl,
+            'urlSuccess' => $successReturnUrl,
+
+            'paid_content_url' => $successReturnUrl,
 
             // код системы интернет-магазина, запросить у поддержки,
             //     для самописных систем можно оставлять пустым полем
             //     (при необходимости прописать свой код)
-            'sys'             => $this->config['sys'],
+            'sys'              => $this->config['sys'],
 
             // служебный url-адрес для уведомления интернет-магазина
             //           о поступлении оплаты по заказу
             // 	         пока реализован только для Advantshop,
             //           формат данных настроен под систему интернет-магазина
             //           (при необходимости прописать свой адрес)
-            'urlNotification' => $this->config['notificationUrl'],
+            'urlNotification'  => $this->config['notificationUrl'],
         ];
 
 
         $data['signature'] = Hmac::create($data, $secret_key);
 
         $link = sprintf('%s?%s', $linktoform, http_build_query($data));
+        \Log::info($link);
 
         return file_get_contents($link);
     }
@@ -413,8 +418,8 @@ class ProdamusDriver implements PayService, ProdamusService
     public static function getOptions(): array
     {
         return [
-            (new PayServiceOption())->setType(PayServiceOption::TYPE_STRING)->setLabel('Домен')->setAlias('domain'),
-            (new PayServiceOption())->setType(PayServiceOption::TYPE_STRING)->setLabel('Код')->setAlias('sys'),
+            (new PayServiceOption())->setType(PayServiceOption::TYPE_STRING)->setLabel('Адрес платёжной формы')->setAlias('domain'),
+//            (new PayServiceOption())->setType(PayServiceOption::TYPE_STRING)->setLabel('Код')->setAlias('sys'),
             (new PayServiceOption())->setType(PayServiceOption::TYPE_STRING)->setLabel('Секретный код')->setAlias('secret'),
         ];
     }
